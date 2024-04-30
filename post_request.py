@@ -1,11 +1,11 @@
 import boto3
 
-client = boto3.client('sagemaker-runtime', region_name='us-east-1')
+client = boto3.client('sagemaker-runtime', region_name='us-east-2')
 
 response = client.invoke_endpoint(
-    EndpointName="deploy-hub-ep-igzdvfhi",
+    EndpointName="deploy-s3-ep-wurxfiib",
     ContentType="application/json",
-    Body='{"inputs": "This product is amazing and great and makes me happy: Words said by no-one."}',
+    Body='[0, 1, 2, 3]',
 )
 
 print(response["Body"].read())

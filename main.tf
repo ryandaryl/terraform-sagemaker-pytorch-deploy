@@ -1,3 +1,7 @@
+provider "aws" {
+  region = "us-east-2"
+}
+
 # random lowercase string used for naming
 resource "random_string" "resource_id" {
   length  = 8
@@ -8,13 +12,13 @@ resource "random_string" "resource_id" {
 }
 
 data "aws_sagemaker_prebuilt_ecr_image" "deploy_image" {
-  repository_name = "huggingface-pytorch-inference"
-  image_tag       = "1.9.1-transformers4.12.3-gpu-py38-cu111-ubuntu20.04"
+  repository_name = "pytorch-inference"
+  image_tag       = "2.2.0-gpu-py310-cu118-ubuntu20.04-sagemaker"
 }
 
 resource "aws_iam_role" "new_role" {
   count = 1
-  name  = "deploy-hub-sagemaker-execution-role-${random_string.resource_id.result}"
+  name  = "deploy-s3-sagemaker-execution-role-${random_string.resource_id.result}"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -57,18 +61,24 @@ resource "aws_iam_role" "new_role" {
   }
 }
 
-resource "aws_sagemaker_model" "model_with_hub_model" {
+resource "aws_sagemaker_model" "model_with_model_artifact" {
   count              = 1
-  name               = "deploy-hub-model-${random_string.resource_id.result}"
+  name               = "deploy-s3-model-${random_string.resource_id.result}"
   execution_role_arn = aws_iam_role.new_role[0].arn
 
   primary_container {
-    image = data.aws_sagemaker_prebuilt_ecr_image.deploy_image.registry_path
+    # CPU Image
+    image          = data.aws_sagemaker_prebuilt_ecr_image.deploy_image.registry_path
+	model_data_url = "s3://instance-transfer/model.tar.gz"
+	#model_data_source {
+    #  s3_data_source {
+    #    s3_uri = "s3://instance-transfer/model.pt"
+    #    s3_data_type = "S3Object"
+    #    compression_type = "None"
+    #  }
+	#}
     environment = {
-      HF_TASK           = "text-classification"
-      HF_MODEL_ID       = "distilbert-base-uncased-finetuned-sst-2-english"
-      HF_API_TOKEN      = null
-      HF_MODEL_REVISION = null
+      HF_TASK = "text-classification"
     }
   }
 
@@ -78,12 +88,12 @@ resource "aws_sagemaker_model" "model_with_hub_model" {
 }
 
 locals {
-  sagemaker_model = aws_sagemaker_model.model_with_hub_model[0]
+  sagemaker_model = aws_sagemaker_model.model_with_model_artifact[0]
 }
 
-resource "aws_sagemaker_endpoint_configuration" "huggingface" {
+resource "aws_sagemaker_endpoint_configuration" "my_endpoint_config" {
   count = 1
-  name  = "deploy-hub-ep-config-${random_string.resource_id.result}"
+  name  = "deploy-s3-ep-config-${random_string.resource_id.result}"
 
 
   production_variants {
@@ -96,11 +106,11 @@ resource "aws_sagemaker_endpoint_configuration" "huggingface" {
 
 
 locals {
-  sagemaker_endpoint_config = aws_sagemaker_endpoint_configuration.huggingface[0]
+  sagemaker_endpoint_config = aws_sagemaker_endpoint_configuration.my_endpoint_config[0]
 }
 
-resource "aws_sagemaker_endpoint" "huggingface" {
-  name = "deploy-hub-ep-${random_string.resource_id.result}"
+resource "aws_sagemaker_endpoint" "my_endpoint_config" {
+  name = "deploy-s3-ep-${random_string.resource_id.result}"
 
   endpoint_config_name = local.sagemaker_endpoint_config.name
 }
